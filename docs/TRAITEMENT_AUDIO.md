@@ -68,7 +68,21 @@ Activer `use_apll = true` pour une horloge plus précise et
 `tx_desc_auto_clear = true` pour injecter du silence automatiquement
 si le buffer TX n'est pas rempli à temps.
 
-## 5. Mesure du retard émission → réception
+## 5. Canal du microphone ICS-43434
+
+Le buffer I2S est interleaved stéréo : L, R, L, R…
+Le microphone ICS-43434 émet sur le **canal droit** (index impairs).
+Pour extraire uniquement le canal du micro :
+
+```c
+int32_t sample = rxBuffer[i * 2 + 1];  // canal droit
+```
+
+**Piège :** lire `rxBuffer[i]` séquentiellement mélange L et R, ce qui donne
+un signal dilué (RMS divisé par ~√2) et un spectre FFT inexploitable sur un bin
+précis. Toujours séparer les canaux avant traitement.
+
+## 6. Mesure du retard émission → réception
 
 ### Latence observée : ~120 ms
 
@@ -89,7 +103,7 @@ ce qui dilue l'énergie d'un bin FFT spécifique.
 
 Le seuil RMS de **0.005** fonctionne bien avec un bruit de fond typique de 0.0002–0.0003.
 
-## 6. Choix du sample rate
+## 7. Choix du sample rate
 
 Le sample rate de **32000 Hz** (au lieu de 44100) a été choisi pour que
 1000 Hz tombe exactement sur le bin 8 de la FFT (résolution = 125 Hz/bin).

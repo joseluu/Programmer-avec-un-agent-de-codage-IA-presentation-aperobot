@@ -230,7 +230,7 @@ void drawSpectrum(int x, int y, int width, int height, const float* spec, int bi
 }
 
 void loop() {
-  static int32_t rxBuffer[WINDOW_SIZE * 2];
+  static int32_t rxBuffer[WINDOW_SIZE * 2];  // WINDOW_SIZE paires stéréo (L+R)
   static size_t read_size = 0;
   static bool wasQuiet = true;
   static int displayDelayMs = -1;
@@ -242,7 +242,7 @@ void loop() {
   if (samples < WINDOW_SIZE) return;
 
   for (int i = 0; i < WINDOW_SIZE; i++) {
-    int32_t sample = rxBuffer[i];
+    int32_t sample = rxBuffer[i * 2 + 1];  // canal droit (ICS-43434)
     int16_t left = (sample >> 16) & 0xFFFF;
     fftReal[i] = (float)left / 32768.0f;
   }
