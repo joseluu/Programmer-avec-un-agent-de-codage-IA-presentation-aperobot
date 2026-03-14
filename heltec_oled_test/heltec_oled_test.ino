@@ -7,12 +7,14 @@
 #define OLED_SCL 15
 #define OLED_RST 16
 
-#define SAMPLE_RATE 44100
+#define SAMPLE_RATE 32000
 #define WINDOW_SIZE 256
 
-#define FREQ 400
-#define ACTIVE_DURATION 100
-#define SILENCE_DURATION 400
+#define FREQ 1000
+#define ACTIVE_DURATION 20
+#define SILENCE_DURATION 500
+
+#define DETECT_THRESHOLD 0.005f  // seuil RMS pour détection du son reçu
 
 SSD1306Wire display(0x3c, OLED_SDA, OLED_SCL, GEOMETRY_128_64);
 
@@ -25,6 +27,8 @@ float fftImag[WINDOW_SIZE];
 float spectrum[WINDOW_SIZE / 2];
 
 volatile bool soundActive = false;
+volatile unsigned long txStartMicros = 0;  // timestamp début émission (µs)
+volatile bool txNewPulse = false;          // nouvelle impulsion émise, pas encore détectée
 
 // Sine table (32-bit samples for full duplex compatibility)
 #define SAMPLES_PER_CYCLE (SAMPLE_RATE / FREQ)
@@ -52,6 +56,8 @@ void audioTxTask(void* param) {
     } else if (!active && now - lastToggle >= SILENCE_DURATION) {
       active = true;
       lastToggle = now;
+      txStartMicros = micros();
+      txNewPulse = true;
     }
     soundActive = active;
 
@@ -226,8 +232,11 @@ void drawSpectrum(int x, int y, int width, int height, const float* spec, int bi
 void loop() {
   static int32_t rxBuffer[WINDOW_SIZE * 2];
   static size_t read_size = 0;
+  static bool wasQuiet = true;
+  static int displayDelayMs = -1;
 
   i2s_read(I2S_PORT, rxBuffer, sizeof(rxBuffer), &read_size, portMAX_DELAY);
+  unsigned long rxTimeMicros = micros();
 
   int samples = read_size / sizeof(int32_t);
   if (samples < WINDOW_SIZE) return;
@@ -238,11 +247,7 @@ void loop() {
     fftReal[i] = (float)left / 32768.0f;
   }
 
-  applyWindow(fftReal, window, WINDOW_SIZE);
-
-  computeFFT(fftReal, fftImag, WINDOW_SIZE);
-  computeSpectrum(fftReal, fftImag, spectrum, WINDOW_SIZE);
-
+  // Calcul RMS pour affichage niveau
   float sumL = 0;
   for (int i = 0; i < WINDOW_SIZE; i++) {
     sumL += fftReal[i] * fftReal[i];
@@ -250,9 +255,37 @@ void loop() {
   float rmsL = sqrt(sumL / WINDOW_SIZE);
   float dbL = rmsToDb(rmsL);
 
+  applyWindow(fftReal, window, WINDOW_SIZE);
+  computeFFT(fftReal, fftImag, WINDOW_SIZE);
+  computeSpectrum(fftReal, fftImag, spectrum, WINDOW_SIZE);
+
+  // Nouvelle impulsion émise : reset de la détection
+  if (txNewPulse) {
+    txNewPulse = false;
+    wasQuiet = true;
+    displayDelayMs = -1;
+  }
+
+  // Détection du front montant par RMS
+  if (wasQuiet && rmsL > DETECT_THRESHOLD && txStartMicros > 0) {
+    unsigned long delayUs = rxTimeMicros - txStartMicros;
+    displayDelayMs = delayUs / 1000;
+    wasQuiet = false;
+    Serial.printf("Delay: %d ms (rms=%.4f)\n", displayDelayMs, rmsL);
+  } else if (rmsL < DETECT_THRESHOLD * 0.3f) {
+    wasQuiet = true;
+  }
+
   display.clear();
   display.setFont(ArialMT_Plain_10);
   display.setTextAlignment(TEXT_ALIGN_LEFT);
+
+  // Retard mesuré en haut à gauche
+  if (displayDelayMs >= 0) {
+    display.drawString(0, 0, String(displayDelayMs) + " ms");
+  } else {
+    display.drawString(0, 0, "-- ms");
+  }
 
   // Indicateur son actif : carré 5px en haut à droite
   if (soundActive) {
