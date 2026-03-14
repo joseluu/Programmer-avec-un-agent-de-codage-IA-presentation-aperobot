@@ -32,7 +32,25 @@
 - Configuration I2S en mode MASTER | TX avec driver i2s.h
 - Ajout de l'affichage "monte le son" / "silence" en fonction de l'etat
 
-**Resultat:** Pas de son sur le peripherique I2S (PCM5102A) despite toutes les configurations essayees. L'affichage fonctionne correctement.
+**Resultat:** Pas de son sur le peripherique I2S (PCM5102A) despite toutes les configurations essayees. L'affichage fonctionne correctement. Code implémente mais non fonctionnel.
+
+---
+
+## Taches combinees (1 + 2)
+
+**Description:** Le code combine maintenant la sortie audio (tache 1) et l'entree audio (tache 2)
+
+**Configuration:**
+- I2S_NUM_1 (RX): Microphone - GPIO 26
+- I2S_NUM_0 (TX): Sortie audio - GPIO 25
+- Horloges partagees: BCK GPIO 22, WS GPIO 23
+
+**Affichage:**
+- "monte le son" / "silence" pendant 100ms / 400ms
+- Niveau microphone en dB + barre horizontale
+- Spectre FFT sur 32 bins
+
+**Resultat:** Code compile et upload, affichage OK, son ne sort toujours pas
 
 ---
 
